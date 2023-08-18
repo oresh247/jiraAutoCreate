@@ -78,7 +78,6 @@ def createStory(summary, description, acceptanceCriteria, labels):
         raise Exception("Error creating story")
     return json.loads(response.text)
 
-
 def createDefect(epic, estimate, sprint, count):
     data = {
         "fields": {
@@ -217,7 +216,6 @@ def createTask(epic, estimate, sprint, count):
         raise Exception("Error creating story " + response)
     return json.loads(response.text)
 
-
 def createSubTask(epic, estimate, sprint, count):
     data = {
         "fields": {
@@ -318,7 +316,6 @@ def createAllIssues(issueSummary, issueDescription, issueAcceptanceCriteria, iss
     # task = createTask("QA.TEST " + issueSummary, story.get("key"), issueLabels)
     # print("Task created: " + task.get("key"))
 
-
 def getIssue(issueKey):
     url = jiraUrl + issueKey
     response = session.get(url, verify=False)
@@ -326,14 +323,12 @@ def getIssue(issueKey):
         raise Exception("Error get issue data " + response)
     return json.loads(response.text)
 
-
 def getSprint(sprintId):
     url = sprintUrl + str(sprintId)
     response = session.get(url, verify=False)
     if response.ok != True:
         raise Exception("Error get sprint data " + response)
     return json.loads(response.text)
-
 
 def createSuperSprintIssue(issuetype):
     with open('tasks.csv', 'r', encoding='utf-8') as csv_file:
@@ -389,7 +384,6 @@ def createSuperSprintIssue(issuetype):
         output = str(log).replace("'", '"')
         return output
 
-
 def getSferaTask(taskId):
     url = sferaUrl + taskId
     response = session.get(url, verify=False)
@@ -398,15 +392,14 @@ def getSferaTask(taskId):
 def changeChildParent(oldParentId, newParentId):
     task = getSferaTask(oldParentId)
     for childTask in task['childEntities']:
-        print(childTask['number'])
-        changeParent(childTask['number'], newParentId)
-
+        if childTask['status'] != 'closed':
+            print(childTask['number'])
+            changeParent(childTask['number'], newParentId)
 
 def changeParent(childId,parentId):
     url = sferaUrl + childId
     data = {"parent": parentId}
     session.patch(url, json=data, verify=False)
-
 
 def changeSprint(taskId,sprintId):
     url = sferaUrl + taskId
@@ -430,12 +423,10 @@ def closeAllDoneSubTask():
         url = sferaUrl + subTaskNumber
         session.patch(url, json=data, verify=False)
 
-
 def getTestCase(testCaseId):
     url = sferaTestCaseUrl + testCaseId
     response = session.get(url, verify=False)
     return json.loads(response.text)
-
 
 def testCaseToCVS(testCase,table):
     testIssueCodeValue=testCase['testIssueCode']
@@ -470,30 +461,161 @@ def cleanhtml(raw_html):
   cleantext = re.sub(CLEANR, '', raw_html)
   return cleantext
 
-
 def getRelisTestCases(sections):
     url = sferaTSectionsUrl + sections + '/test-issues'
     response = session.get(url, verify=False)
     return json.loads(response.text)
 
-table = {'testIssueCode': [],'status': [],'priority': [],'modifiedBy': [],'link': [],'action': [], 'expectedResult': []}
-sections = getRelisTestCases('151328')
-for testCase in sections['content']:
-    testCaseId = testCase['testIssueCode']
-    testCase = getTestCase(testCaseId)
-    table = testCaseToCVS(testCase, table)
+def getTaskQuery(query):
+    urlQuery = sferaUrl+ "?query=" + query
+    response=session.get(urlQuery, verify=False)
+    return json.loads(response.text)
 
-CVS = pd.DataFrame(table)
-CVS.index = CVS.index + 1
-CVS.to_csv('GFG.csv', encoding="utf-8")
-print(CVS)
+def taskSetStatus(taskId,status):
+    data = {"status": status}
+    url = sferaUrl + taskId
+    session.patch(url, json=data, verify=False)
 
-#changeChildParent("SKOKR-4624", "SKOKR-4625")
+def taskSetSpent(taskId,spent):
+    data = \
+        {
+            "spent": spent,
+            "propertiesToRemove": ["remainder"]
+        }
+    url = sferaUrl + taskId
+    session.patch(url, json=data, verify=False)
+
+def createTestTable():
+    table = {'testIssueCode': [],'status': [],'priority': [],'modifiedBy': [],'link': [],'action': [], 'expectedResult': []}
+    sections = getRelisTestCases('151328')
+    for testCase in sections['content']:
+        testCaseId = testCase['testIssueCode']
+        testCase = getTestCase(testCaseId)
+        table = testCaseToCVS(testCase, table)
+
+    CVS = pd.DataFrame(table)
+    CVS.index = CVS.index + 1
+    CVS.to_csv('GFG.csv', encoding="utf-8")
+    print(CVS)
+
+def closeAllTaskInSprint(count):
+    query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+hasActiveSprint()+and+type+in+(%27task%27)+and+status%3D%27created%27"
+    queryResult = getTaskQuery(query)
+    for task in queryResult['content']:
+        count = count - 1
+        if count == 0:
+            return
+        taskId = task['number']
+        print(taskId)
+        taskSetStatus(taskId, "inProgress")
+        spend = task['estimation']
+        taskSetSpent(taskId, spend)
+        taskSetStatus(taskId, "closed")
+
+def closeAllDefectInSprint():
+    query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+hasActiveSprint()+and+type+in+(%27defect%27)+and+status%3D%27created%27"
+    queryResult = getTaskQuery(query)
+    for task in queryResult['content']:
+        taskId = task['number']
+        taskSetStatus(taskId, "analysis")
+        taskSetStatus(taskId, "fixing")
+        spend = task['estimation']
+        taskSetSpent(taskId, spend)
+        taskSetStatus(taskId, "testing")
+        taskSetStatus(taskId, "closed")
+
+def closeAllDoneTask():
+    query = "area+%3D+%27SKOKR%27++and+type+in+(%27task%27)+and+hasActiveSprint()++and+status+%3D+%27done%27"
+    urlQuery = sferaUrl+ "?query=" + query
+    data = {"status": "closed"}
+    response=session.get(urlQuery, verify=False)
+    subTasks = json.loads(response.text)
+    for subTask in subTasks['content']:
+        subTaskNumber = subTask['number']
+        print(subTaskNumber)
+        url = sferaUrl + subTaskNumber
+        session.patch(url, json=data, verify=False)
+
+def changeEstimation(sprint,date):
+    query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and++sprint%3D%27"+sprint+"%27+and+dueDate%3C%22"+date+"%22"
+    urlQuery = sferaUrl+ "?query=" + query
+    data = {
+        "dueDate": date
+    }
+    response=session.get(urlQuery, verify=False)
+    subTasks = json.loads(response.text)
+    for subTask in subTasks['content']:
+        subTaskNumber = subTask['number']
+        print(subTaskNumber)
+        url = sferaUrl + subTaskNumber
+        session.patch(url, json=data, verify=False)
+
+def changeSubTaskSprintDueDate(oldSprint,newSprint,date):
+    query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+type+in+(%27subtask%27)+and+not+hasOnlyActiveOrPlannedSprint()+and+sprint%3D%27"+oldSprint+"%27"
+    urlQuery = sferaUrl+ "?query=" + query
+    data = {
+        "sprint": newSprint,
+        "dueDate": date
+    }
+    response=session.get(urlQuery, verify=False)
+    subTasks = json.loads(response.text)
+    for subTask in subTasks['content']:
+        subTaskNumber = subTask['number']
+        print(subTaskNumber)
+        url = sferaUrl + subTaskNumber
+        session.patch(url, json=data, verify=False)
+
+def changeNotPlanedDueDate(date):
+    query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and++not+hasOnlyActiveOrPlannedSprint()+and+dueDate%3C%22"+date+"%22"
+    urlQuery = sferaUrl+ "?query=" + query
+    data = {
+        "dueDate": date
+    }
+    response=session.get(urlQuery, verify=False)
+    subTasks = json.loads(response.text)
+    for subTask in subTasks['content']:
+        subTaskNumber = subTask['number']
+        print(subTaskNumber)
+        url = sferaUrl + subTaskNumber
+        session.patch(url, json=data, verify=False)
+
+def changeTypeToSubtask(taskId,parentId,type):
+    url = sferaUrl + taskId
+    data = {
+        "parent": parentId,
+        "type": type
+    }
+    session.patch(url, json=data, verify=False)
+
+def changeDefectSprintDueDate(sprint, newSprint, date):
+    query = "sprint%20%3D%20%27" + sprint + "%27%20and%20area%3D%27SKOKR%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27defect%27%29"
+    urlQuery = sferaUrl+ "?query=" + query
+    data = {
+        "dueDate": date,
+        "sprint": newSprint
+    }
+    response=session.get(urlQuery, verify=False)
+    subTasks = json.loads(response.text)
+    for subTask in subTasks['content']:
+        subTaskNumber = subTask['number']
+        print(subTaskNumber)
+        url = sferaUrl + subTaskNumber
+        session.patch(url, json=data, verify=False)
+
+
+#changeSubTaskSprintDueDate('19', '20', "2023-08-22")
+#changeDefectSprintDueDate('19', '20', "2023-08-22")
+#changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
+#changeNotPlanedDueDate("2023-09-27")
+#changeEstimation('19', "2023-08-15")
+#closeAllDoneTask()
+closeAllTaskInSprint(5)
+#closeAllDefectInSprint()
+#changeChildParent("SKOKR-4625", "SKOKR-4629")
 #changeChildParent("SKOKR-4625", "SKOKR-4625")
 #changeSprint("SKOKR-4318",18)
 #changeDueDate("SKOKR-4318","2023-08-01")
 #closeAllDoneSubTask()
-
 #out = createSuperSprintIssue("Sub-task")
 #out = createSuperSprintIssue("Task")
 #out = createSuperSprintIssue("Defect")
