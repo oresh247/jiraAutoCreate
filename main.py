@@ -810,8 +810,8 @@ def getDeliveryPriority(epic):
 
 
 #out = createSuperSprintSferaIssue("task")
-#out = createSuperSprintSferaIssue("defect")
-#print("\n" + out)
+out = createSuperSprintSferaIssue("defect")
+print("\n" + out)
 
 # changeSubTaskSprintDueDate('21', '22', "2023-09-26")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
@@ -819,7 +819,7 @@ def getDeliveryPriority(epic):
 # changeNotPlanedDueDate("2023-09-27")
 # changeEstimation('19', "2023-08-15")
 # closeAllDoneTask()
-closeAllTaskInSprint(5)
+#closeAllTaskInSprint(5)
 # closeAllDefectInSprint()
 # changeChildParent("SKOKR-4625", "SKOKR-4629")
 # changeChildParent("SKOKR-4625", "SKOKR-4625")
