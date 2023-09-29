@@ -524,7 +524,24 @@ def createTestTable():
     print(CVS)
 
 
-def closeAllTaskInSprint(count):
+def closeAllTaskInSprint(tempCount):
+    count=tempCount
+    print("Закрыть")
+    query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+hasActiveSprint()+and+type+in+(%27task%27)+and+status%3D%27inProgress%27"
+    queryResult = getTaskQuery(query)
+    for task in queryResult['content']:
+        count = count - 1
+        if count == 0:
+            return
+        taskId = task['number']
+        print(taskId)
+        # taskSetStatus(taskId, "inProgress")
+        # spend = task['estimation']
+        # taskSetSpent(taskId, spend)
+        taskSetStatus(taskId, "closed")
+
+    count=tempCount
+    print("В работу")
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+hasActiveSprint()+and+type+in+(%27task%27)+and+status%3D%27created%27"
     queryResult = getTaskQuery(query)
     for task in queryResult['content']:
@@ -536,8 +553,7 @@ def closeAllTaskInSprint(count):
         taskSetStatus(taskId, "inProgress")
         spend = task['estimation']
         taskSetSpent(taskId, spend)
-        taskSetStatus(taskId, "closed")
-
+        # taskSetStatus(taskId, "closed")
 
 def closeAllDefectInSprint():
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+hasActiveSprint()+and+type+in+(%27defect%27)+and+status%3D%27created%27"
@@ -810,16 +826,16 @@ def getDeliveryPriority(epic):
 
 
 #out = createSuperSprintSferaIssue("task")
-out = createSuperSprintSferaIssue("defect")
-print("\n" + out)
+#out = createSuperSprintSferaIssue("defect")
+#print("\n" + out)
 
-# changeSubTaskSprintDueDate('21', '22', "2023-09-26")
+#changeSubTaskSprintDueDate('22', '23', "2023-10-10")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
 # changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
 # changeNotPlanedDueDate("2023-09-27")
 # changeEstimation('19', "2023-08-15")
 # closeAllDoneTask()
-#closeAllTaskInSprint(5)
+closeAllTaskInSprint(5)
 # closeAllDefectInSprint()
 # changeChildParent("SKOKR-4625", "SKOKR-4629")
 # changeChildParent("SKOKR-4625", "SKOKR-4625")
