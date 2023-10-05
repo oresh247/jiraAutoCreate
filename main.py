@@ -499,6 +499,22 @@ def taskSetStatus(taskId, status):
     session.patch(url, json=data, verify=False)
 
 
+def taskSetStatusClosed(taskId):
+    data = {
+	"customFieldsValues": [
+		{
+			"code": "resolution",
+			"value": "Готово"
+		}
+	],
+	"resolution": [
+		"Готово"
+	],
+	"status": "closed"
+    }
+    url = sferaUrl + taskId
+    session.patch(url, json=data, verify=False)
+
 def taskSetSpent(taskId, spent):
     data = \
         {
@@ -538,7 +554,7 @@ def closeAllTaskInSprint(tempCount):
         # taskSetStatus(taskId, "inProgress")
         # spend = task['estimation']
         # taskSetSpent(taskId, spend)
-        taskSetStatus(taskId, "closed")
+        taskSetStatusClosed(taskId)
 
     count=tempCount
     print("В работу")
@@ -835,7 +851,7 @@ def getDeliveryPriority(epic):
 # changeNotPlanedDueDate("2023-09-27")
 # changeEstimation('19', "2023-08-15")
 # closeAllDoneTask()
-closeAllTaskInSprint(5)
+closeAllTaskInSprint(10)
 # closeAllDefectInSprint()
 # changeChildParent("SKOKR-4625", "SKOKR-4629")
 # changeChildParent("SKOKR-4625", "SKOKR-4625")
