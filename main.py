@@ -501,24 +501,27 @@ def taskSetStatus(taskId, status):
 
 def taskSetStatusClosed(taskId):
     data = {
-	"customFieldsValues": [
-		{
-			"code": "resolution",
-			"value": "Готово"
-		}
-	],
-	"resolution": [
-		"Готово"
-	],
-	"status": "closed"
+        "customFieldsValues": [
+            {
+                "code": "resolution",
+                "value": "Готово"
+            }
+        ],
+        "resolution": [
+            "Готово"
+        ],
+        "status": "closed"
     }
     url = sferaUrl + taskId
     session.patch(url, json=data, verify=False)
+
 
 def taskSetSpent(taskId, spent):
     data = \
         {
             "spent": spent,
+            "description": "",
+            "userLogin": devUser,
             "propertiesToRemove": ["remainder"]
         }
     url = sferaUrl + taskId
@@ -541,7 +544,7 @@ def createTestTable():
 
 
 def closeAllTaskInSprint(tempCount):
-    count=tempCount
+    count = tempCount
     print("Закрыть")
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+hasActiveSprint()+and+type+in+(%27task%27)+and+status%3D%27inProgress%27"
     queryResult = getTaskQuery(query)
@@ -556,7 +559,7 @@ def closeAllTaskInSprint(tempCount):
         # taskSetSpent(taskId, spend)
         taskSetStatusClosed(taskId)
 
-    count=tempCount
+    count = tempCount
     print("В работу")
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+hasActiveSprint()+and+type+in+(%27task%27)+and+status%3D%27created%27"
     queryResult = getTaskQuery(query)
@@ -570,6 +573,7 @@ def closeAllTaskInSprint(tempCount):
         spend = task['estimation']
         taskSetSpent(taskId, spend)
         # taskSetStatus(taskId, "closed")
+
 
 def closeAllDefectInSprint():
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+hasActiveSprint()+and+type+in+(%27defect%27)+and+status%3D%27created%27"
@@ -726,7 +730,7 @@ def createSuperSprintSferaIssue(issuetype):
 
 
 def getSferaSprint(sprintId):
-    query = '?areaCode=SKOKR&page=0&size=7&statuses=active,planned'
+    query = '?areaCode=SKOKR&page=0&size=12&statuses=active,planned'
     url = sferaSprintUrl + query
     response = session.get(url, verify=False)
     if response.ok != True:
@@ -739,8 +743,9 @@ def getSferaSprint(sprintId):
 
 def createSferaTask(epic, estimate, sprint, count, workGroup):
     data = {
-        "name": epic["name"] + " - " + postfixValue[count] + " - " + sprint["name"].split('.')[
-            1] + "-" + sprint["name"].split('.')[2],
+        # "name": epic["name"] + " - " + postfixValue[count] + " - " + sprint["name"].split('.')[
+        #     1] + "-" + sprint["name"].split('.')[2],
+        "name": epic["name"] + " - " + postfixValue[count],
         "assignee": config["SFERAUSER"]["devUser"],
         "owner": config["SFERAUSER"]["devUser"],
         "dueDate": sprint["endDate"],
@@ -764,11 +769,15 @@ def createSferaTask(epic, estimate, sprint, count, workGroup):
             },
             {
                 "code": "projectConsumer",
-                "value": "1625 Развитие Кредитного конвейера СМБ 2.0"
+                "value": "c146f7f3-e894-4f22-bacd-0dcb110b01b4"
             },
             {
                 "code": "projectConsumer",
-                "value": "1626 Развитие документарного конвейера СМБ 2.0"
+                "value": "da2bc81b-5928-4f05-a7f4-4a9a5e48ce68"
+            },
+            {
+                "code": "projectConsumer",
+                "value": "1ec38fc1-2f03-497b-b51e-56e16ad8f260"
             },
             {
                 "code": "workGroup",
@@ -788,14 +797,15 @@ def createSferaTask(epic, estimate, sprint, count, workGroup):
 
 def createSferaDefect(epic, estimate, sprint, count, workGroup):
     data = {
-        "description": epic["description"],
+        "description": "Устранение дефектов" + " - " + postfixDefectValue[count],
         "assignee": config["SFERAUSER"]["devUser"],
         "owner": config["SFERAUSER"]["devUser"],
         "dueDate": sprint["endDate"],
         "estimation": estimate * 28800,
         "remainder": estimate * 28800,
-        "name": "Устранение дефектов" + " - " + postfixDefectValue[count] + " - " + sprint["name"].split('.')[
-            1] + "-" + sprint["name"].split('.')[2],
+        # "name": "Устранение дефектов" + " - " + postfixDefectValue[count] + " - " + sprint["name"].split('.')[
+        #     1] + "-" + sprint["name"].split('.')[2],
+        "name": "Устранение дефектов" + " - " + postfixDefectValue[count],
         "priority": "average",
         "status": "created",
         "type": "defect",
@@ -841,17 +851,63 @@ def getDeliveryPriority(epic):
     return workGroup[0]['value']
 
 
-#out = createSuperSprintSferaIssue("task")
-#out = createSuperSprintSferaIssue("defect")
-#print("\n" + out)
+def changeAllNotDoneSubTaskDueDate(date):
+    query = "statusCategory%20%21%3D%20%27Done%27%20and%20area%20%3D%20%27SKOKR%27%20and%20type%20in%20%28%27subtask%27%29%20&size=1000&page=0&attributesToReturn=number%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate"
+    urlQuery = sferaUrl + "?query=" + query
+    data = {
+        "dueDate": date
+    }
+    response = session.get(urlQuery, verify=False)
+    subTasks = json.loads(response.text)
+    for subTask in subTasks['content']:
+        subTaskNumber = subTask['number']
+        print(subTaskNumber)
+        url = sferaUrl + subTaskNumber
+        session.patch(url, json=data, verify=False)
 
-#changeSubTaskSprintDueDate('22', '23', "2023-10-10")
+
+def changeTaskType(epik):
+    query = "parent%20%3D%20%27" + epik + "%27%20and%20area%20%3D%20%27SKOKR%27&size=1000&page=0&attributesToReturn=number%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate"
+    urlQuery = sferaUrl + "?query=" + query
+    data = {
+        "customFieldsValues": [
+            {
+                "code": "archTaskReason",
+                "value": "Прочие архитектурные задачи"
+            },
+            {
+                "code": "workGroup",
+                "value": "Архитектурная задача"
+            }
+        ],
+        "archTaskReason": [
+            "Прочие архитектурные задачи"
+        ],
+        "workGroup": [
+            "Архитектурная задача"
+        ]
+    }
+    response = session.get(urlQuery, verify=False)
+    subTasks = json.loads(response.text)
+    for subTask in subTasks['content']:
+        subTaskNumber = subTask['number']
+        print(subTaskNumber)
+        url = sferaUrl + subTaskNumber
+        session.patch(url, json=data, verify=False)
+
+# out = createSuperSprintSferaIssue("task")
+# out = createSuperSprintSferaIssue("defect")
+# print("\n" + out)
+
+# changeTaskType("SCOR-2702")
+# changeAllNotDoneSubTaskDueDate("2024-04-09")
+# changeSubTaskSprintDueDate('4240', '4241', "2024-02-13")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
 # changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
 # changeNotPlanedDueDate("2023-09-27")
 # changeEstimation('19', "2023-08-15")
 # closeAllDoneTask()
-closeAllTaskInSprint(10)
+closeAllTaskInSprint(7)
 # closeAllDefectInSprint()
 # changeChildParent("SKOKR-4625", "SKOKR-4629")
 # changeChildParent("SKOKR-4625", "SKOKR-4625")
