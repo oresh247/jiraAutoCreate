@@ -6,6 +6,7 @@ import configparser
 import warnings
 import uuid
 import pandas as pd
+import sqlite3 as sl
 import re
 
 from requests.auth import HTTPBasicAuth
@@ -37,6 +38,7 @@ sferaUrlLogin = config["SFERA"]["sferaUrlLogin"]
 sferaTestCaseUrl = config["SFERA"]["sferaTestCaseUrl"]
 sferaTSectionsUrl = config["SFERA"]["sferaTSectionsUrl"]
 sferaSprintUrl = config["SFERA"]["sferaSprintUrl"]
+sferaUrlSearch = config["SFERA"]["sferaUrlSearch"]
 
 # session = requests.Session()
 # session.auth = (config["USER"]["user"], config["USER"]["password"])
@@ -682,6 +684,7 @@ def createSuperSprintSferaIssue(issuetype):
             epicKey = epic["number"]
             print("\n" + "Добавление задач в ЭПИК: " + epicKey)
             workGroup = getWorkGroup(epic)
+            archTaskReason = getArchTaskReason(epic)
             deliveryPriority = getDeliveryPriority(epic)
 
             if issuetype == "Sub-task":
@@ -712,13 +715,13 @@ def createSuperSprintSferaIssue(issuetype):
                         totalEstimate = 0
                     print("new_issue_estimate = " + str(curEstimate))
                     if issuetype == "task":
-                        task = createSferaTask(epic, curEstimate, sprint, taskCount, workGroup)
+                        task = createSferaTask(epic, curEstimate, sprint, taskCount, workGroup, archTaskReason)
                     elif issuetype == "defect":
                         task = createSferaDefect(epic, curEstimate, sprint, taskCount, workGroup)
                     elif issuetype == "subtask":
                         task = createSubTask(epic, curEstimate, sprint, taskCount)
                     else:
-                        task = createSferaTask(epic, curEstimate, sprint, taskCount, workGroup)
+                        task = createSferaTask(epic, curEstimate, sprint, taskCount, workGroup, archTaskReason)
                     taskCount = taskCount + 1
                     taskKey = task.get("number")
                     print("Task created: " + taskKey)
@@ -741,7 +744,7 @@ def getSferaSprint(sprintId):
     return sprint[0]
 
 
-def createSferaTask(epic, estimate, sprint, count, workGroup):
+def createSferaTask(epic, estimate, sprint, count, workGroup, archTaskReason):
     data = {
         # "name": epic["name"] + " - " + postfixValue[count] + " - " + sprint["name"].split('.')[
         #     1] + "-" + sprint["name"].split('.')[2],
@@ -789,6 +792,13 @@ def createSferaTask(epic, estimate, sprint, count, workGroup):
             }
         ]
     }
+
+    if archTaskReason != '':
+        data['customFieldsValues'].append({
+                "code": "archTaskReason",
+                "value": archTaskReason
+            })
+
     response = session.post(sferaUrl, json=data, verify=False)
     if response.ok != True:
         raise Exception("Error creating story " + response)
@@ -814,10 +824,12 @@ def createSferaDefect(epic, estimate, sprint, count, workGroup):
         "customFieldsValues": [
             {
                 "code": "systems",
+                # "value": "1854 ОПС ССО"
                 "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
             },
             {
                 "code": "detectedInSystem",
+                # "value": "1854 ОПС ССО"
                 "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
             },
             {
@@ -845,6 +857,12 @@ def getWorkGroup(epic):
     workGroup = [item for item in epic['customFieldsValues'] if (item['code'] == "workGroup")]
     return workGroup[0]['value']
 
+def getArchTaskReason(epic):
+    archTaskReason = [item for item in epic['customFieldsValues'] if (item['code'] == "archTaskReason")]
+    if len(archTaskReason) == 0:
+        return ''
+    else:
+        return archTaskReason[0]['value']
 
 def getDeliveryPriority(epic):
     workGroup = [item for item in epic['customFieldsValues'] if (item['code'] == "deliveryPriority")]
@@ -895,19 +913,68 @@ def changeTaskType(epik):
         url = sferaUrl + subTaskNumber
         session.patch(url, json=data, verify=False)
 
+
+def getSuperSprintTasks(lst):
+    # формируем список спринтов для запроса
+    query_sprints = ''
+    for sprint in lst:
+        query_add = '%2C%27'
+        query_end = '%27'
+        if query_sprints == '':
+            query_add = '%28%27'
+        query_sprints += query_add + str(sprint) + query_end
+    query_sprints += '%29'
+    query = 'area%3D%27SKOKR%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+    urlQuery = sferaUrlSearch + "?query=" + query
+    #urlQuery = 'https://sfera.inno.local/app/tasks/api/v0.1/entities?query=area%3D%27SKOKR%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20%28%274246%27%2C%274247%27%2C%274248%27%2C%274249%27%2C%274250%27%2C%274251%27%29&size=1000&page=0'
+    response = session.get(urlQuery, verify=False)
+    if response.ok != True:
+        raise Exception("Error get sprint data " + response)
+
+    tasks = json.loads(response.text)
+    return tasks
+
+def checkTasksEstimation(tasks):
+    number = []
+    name = []
+    estimation = []
+    sprint = []
+    epic = []
+    type = []
+    for task in tasks['content']:
+        number.append(task['number'])
+        name.append(task['name'])
+        estimation.append(task['estimation'])
+        sprint.append(task['actualSprint']['name'])
+        type.append(task['workGroup'])
+        if 'parentNumber' in task:
+            epic.append(task['parentNumber'])
+    tasks_df = pd.DataFrame({
+        'number': number,
+        'name': name,
+        'estimation': estimation,
+        'sprint': sprint,
+        'epic': epic,
+        'type': type
+    })
+    return tasks_df
+
 # out = createSuperSprintSferaIssue("task")
 # out = createSuperSprintSferaIssue("defect")
 # print("\n" + out)
+# tasks = getSuperSprintTasks(['4246', '4247', '4248', '4249', '4250', '4251'])
+# tasks_df = checkTasksEstimation(tasks)
+# print (tasks_df)
 
 # changeTaskType("SCOR-2702")
 # changeAllNotDoneSubTaskDueDate("2024-04-09")
-# changeSubTaskSprintDueDate('4240', '4241', "2024-02-13")
+# changeSubTaskSprintDueDate('4244', '4245', "2024-04-09")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
 # changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
 # changeNotPlanedDueDate("2023-09-27")
 # changeEstimation('19', "2023-08-15")
 # closeAllDoneTask()
-closeAllTaskInSprint(7)
+closeAllTaskInSprint(6)
 # closeAllDefectInSprint()
 # changeChildParent("SKOKR-4625", "SKOKR-4629")
 # changeChildParent("SKOKR-4625", "SKOKR-4625")
@@ -918,3 +985,5 @@ closeAllTaskInSprint(7)
 # out = createSuperSprintIssue("Task")
 # out = createSuperSprintIssue("Defect")
 # print("\n" + out)
+
+
