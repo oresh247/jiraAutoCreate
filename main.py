@@ -1,5 +1,7 @@
 # coding:utf-8
 import json
+
+import docx as docx
 import requests
 import csv
 import configparser
@@ -8,6 +10,10 @@ import uuid
 import pandas as pd
 import sqlite3 as sl
 import re
+import docx
+import html
+from bs4 import BeautifulSoup
+
 
 from requests.auth import HTTPBasicAuth
 
@@ -39,6 +45,9 @@ sferaTestCaseUrl = config["SFERA"]["sferaTestCaseUrl"]
 sferaTSectionsUrl = config["SFERA"]["sferaTSectionsUrl"]
 sferaSprintUrl = config["SFERA"]["sferaSprintUrl"]
 sferaUrlSearch = config["SFERA"]["sferaUrlSearch"]
+sferaUrlKnowledge = config["SFERA"]["sferaUrlKnowledge"]
+sferaUrlKnowledge2 = config["SFERA"]["sferaUrlKnowledge2"]
+sferaUrlRelations = config["SFERA"]["sferaUrlRelations"]
 
 # session = requests.Session()
 # session.auth = (config["USER"]["user"], config["USER"]["password"])
@@ -620,6 +629,7 @@ def changeEstimation(sprint, date):
 
 def changeSubTaskSprintDueDate(oldSprint, newSprint, date):
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+type+in+(%27subtask%27)+and+not+hasOnlyActiveOrPlannedSprint()+and+sprint%3D%27" + oldSprint + "%27"
+    #query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+type+in+(%27subtask%27)+and+sprint%3D%27" + oldSprint + "%27"
     urlQuery = sferaUrl + "?query=" + query
     data = {
         "sprint": newSprint,
@@ -924,7 +934,29 @@ def getSuperSprintTasks(lst):
             query_add = '%28%27'
         query_sprints += query_add + str(sprint) + query_end
     query_sprints += '%29'
+    #query = 'area%3D%27SKOKR%27%20and%20statusCategory%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
     query = 'area%3D%27SKOKR%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+
+    # SCOR
+    #query = 'area%3D%27SCOR%27%20and%20statusCategory%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+    #query = 'area%3D%27SCOR%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+
+    # SKREQ
+    #query = 'area%3D%27SKREQ%27%20and%20statusCategory%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+    #query = 'area%3D%27SKREQ%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+
+    # SKSPR
+    #query = 'area%3D%27SKSPR%27%20and%20statusCategory%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+    #query = 'area%3D%27SKSPR%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+
+    # SKPLINT
+    #query = 'area%3D%27SKPLINT%27%20and%20statusCategory%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+    #query = 'area%3D%27SKPLINT%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+
+    # SCORAFS
+    #query = 'area%3D%27SCORAFS%27%20and%20statusCategory%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+    #query = 'area%3D%27SCORAFS%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20' + query_sprints + '&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate%2CworkGroup'
+
     urlQuery = sferaUrlSearch + "?query=" + query
     #urlQuery = 'https://sfera.inno.local/app/tasks/api/v0.1/entities?query=area%3D%27SKOKR%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27task%27%29%20and%20sprint%20in%20%28%274246%27%2C%274247%27%2C%274248%27%2C%274249%27%2C%274250%27%2C%274251%27%29&size=1000&page=0'
     response = session.get(urlQuery, verify=False)
@@ -959,16 +991,163 @@ def checkTasksEstimation(tasks):
     })
     return tasks_df
 
+def changeProject(data, taskId):
+    url = sferaUrl + taskId
+    session.patch(url, json=data, verify=False)
+    print(taskId)
+
+
+def get_links(story):
+    story_data = getSferaTask(story)
+    dics = dict()
+    for task in story_data['relatedEntities']:
+        task_num = task['entity']['number']
+        task_name = task['entity']['name']
+        dics[task_num] = task_name
+    return dics
+
+
+def search_tasks(page_id,project):
+    urlQuery = sferaUrlKnowledge + "cid/" + page_id
+    response = session.get(urlQuery, verify=False).json()
+    content = response['payload']['content']
+    pattern = r'{}{}'.format(project, '-[0-9]{4}')
+    matches = re.findall(pattern, content)
+    return set(matches)
+
+
+def add_task_to_story(task_list,story):
+    for task in task_list:
+        data = {
+        "entityNumber": story,
+        "relatedEntityNumber": task,
+        "relationType": "associatedbugsandstories"
+        }
+        response = session.post(sferaUrlRelations, json=data, verify=False)
+        if response.ok != True:
+            raise Exception("Error creating story " + response)
+
+
+def release_page_gen(parentPage, release, page_name):
+    tasks = get_release_tasks(release)
+    df = create_release_task_df(tasks)
+    grouped_df = create_release_df(df)
+    html = generate_release_html(grouped_df)
+    publication_release_html(html, parentPage, page_name)
+
+
+def get_release_tasks(release):
+    # Формируем запрос
+    query = 'label%20%3D%20%27' + release + '%27&size=1000&page=0&attributesToReturn=checkbox%2Cnumber%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cassignee%2Cowner%2CdueDate%2Clabel%2CparentNumber%2Ccomponent'
+    url = sferaUrl + "?query=" + query
+    # Делаем запрос задач по фильтру
+    response = session.get(url, verify=False)
+    if response.ok != True:
+        raise Exception("Error get sprint data " + response)
+    return json.loads(response.text)
+
+def create_release_task_df(tasks):
+    # Обрабатываем запрос, проходя по всем задачам и формируя списки
+    component_lst = []
+    task_directLink_lst = []
+
+
+    for task in tasks['content']:
+        for component in task['component']:
+            component_lst.append(component['name'])
+            # task_directLink_lst.append(task['directLink'])
+            task_number = task['number']
+            task_name = task['name']
+            template = f"""
+    <p><a target=_blank href=https://sfera.inno.local/tasks/task/{task_number} contenteditable=false class=sfera-link sfera-task sfera-link-style style=text-decoration: none; data-rtc-uid=40340632-c702-45bb-a461-93fdd7f681ef rel=noopener data-mce-href=https://sfera.inno.local/tasks/task/{task_number} data-mce-contenteditable=false>{task_number} {task_name}<span>&nbsp;</span>Выполнено<button class=sfera-status-button sfera-status-done>Выполнено</button></a></p>
+    """
+            task_directLink_lst.append(template)
+
+    tasks_df = pd.DataFrame({
+        'Сервис': component_lst,
+        'Задачи в сфере': task_directLink_lst
+
+    })
+    return tasks_df
+
+def create_release_df(df):
+    grouped_df = df.groupby('Сервис').agg(lambda x: ', '.join(map(str, x)))
+    grouped_df['Требует выкатку связанный сервис'] = ''
+    grouped_df['Версия поставки Новый цод'] = ''
+    grouped_df['Версия еДТО'] = ''
+    grouped_df['Версия для откатки'] = ''
+    grouped_df['Тест-кейсы'] = ''
+    grouped_df['БЛОК'] = ''
+    grouped_df['Комментарии'] = ''
+    return grouped_df
+
+
+def generate_release_html(grouped_df):
+    # Генерируем HTML-код
+    html_code = grouped_df.to_html()
+
+    # Декодируем HTML-спецсимволы
+    decoded_html = html.unescape(html_code)
+    decoded_html = str.replace(decoded_html, '\n', '')
+    decoded_html = str.replace(decoded_html, '\\n', '')
+    decoded_html = str.replace(decoded_html, '"', '')
+    decoded_html = str.replace(decoded_html, 'class=sfera-link sfera-task sfera-link-style',
+                               'class="sfera-link sfera-task sfera-link-style"')
+    return decoded_html
+
+
+def publication_release_html(html, parentPage, page_name):
+    data = {
+        "spaceId": "cbbcfa0b-0542-4407-9e49-61c6aa7caf1b",
+        "parentCid": parentPage,
+        "name": page_name,
+        "content": html
+    }
+    response = session.post(sferaUrlKnowledge2, json=data, verify=False)
+    if response.ok != True:
+        raise Exception("Error creating story " + response)
+    return json.loads(response.text)
+
+
+# # Генерация страницы ЗНИ
+# parent_page = '426943'
+# release = 'OKR_20240623_ATM'
+# release_page_gen(parent_page, release, release)
+
+
+
 # out = createSuperSprintSferaIssue("task")
 # out = createSuperSprintSferaIssue("defect")
 # print("\n" + out)
+
+# # добавление задач со страницы в Story
+# task_list = search_tasks('1258896', 'SKOKR') # Получаем список задач
+# add_task_to_story(task_list, 'SKOKR-6107') # Добавляем все задачи в Story
+
+# # Распечатка всех задач в Story
+# dics = get_links('SKOKR-6116')
+# for key, value in dics.items():
+#     print(f"{key}: {value}")
+
+
+# # Перепривязка проектов
 # tasks = getSuperSprintTasks(['4246', '4247', '4248', '4249', '4250', '4251'])
+# for task in tasks['content']:
+#     number = task['number']
+#     parentNumber = task['parentNumber']
+#     epic = getSferaTask(parentNumber)
+#     projects = [project for project in epic['customFieldsValues'] if project['code'] == "projectConsumer"]
+#     new_projects = {'customFieldsValues': projects}
+#     changeProject(new_projects, number)
+# print(tasks)
+
+
 # tasks_df = checkTasksEstimation(tasks)
 # print (tasks_df)
 
 # changeTaskType("SCOR-2702")
-# changeAllNotDoneSubTaskDueDate("2024-04-09")
-# changeSubTaskSprintDueDate('4244', '4245', "2024-04-09")
+# changeAllNotDoneSubTaskDueDate("2024-07-02")
+# changeSubTaskSprintDueDate('4250', '4251', "2024-07-02")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
 # changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
 # changeNotPlanedDueDate("2023-09-27")
