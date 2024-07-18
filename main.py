@@ -13,6 +13,8 @@ import re
 import docx
 import html
 from bs4 import BeautifulSoup
+import pandas as pd
+import numpy as np
 
 
 from requests.auth import HTTPBasicAuth
@@ -499,7 +501,7 @@ def getRelisTestCases(sections):
 
 
 def getTaskQuery(query):
-    urlQuery = sferaUrl + "?query=" + query
+    urlQuery = sferaUrlSearch + "?query=" + query
     response = session.get(urlQuery, verify=False)
     return json.loads(response.text)
 
@@ -630,7 +632,7 @@ def changeEstimation(sprint, date):
 def changeSubTaskSprintDueDate(oldSprint, newSprint, date):
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+type+in+(%27subtask%27)+and+not+hasOnlyActiveOrPlannedSprint()+and+sprint%3D%27" + oldSprint + "%27"
     #query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+type+in+(%27subtask%27)+and+sprint%3D%27" + oldSprint + "%27"
-    urlQuery = sferaUrl + "?query=" + query
+    urlQuery = sferaUrlSearch + "?query=" + query
     data = {
         "sprint": newSprint,
         "dueDate": date
@@ -646,7 +648,7 @@ def changeSubTaskSprintDueDate(oldSprint, newSprint, date):
 
 def changeNotPlanedDueDate(date):
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and++not+hasOnlyActiveOrPlannedSprint()+and+dueDate%3C%22" + date + "%22"
-    urlQuery = sferaUrl + "?query=" + query
+    urlQuery = sferaUrlSearch + "?query=" + query
     data = {
         "dueDate": date
     }
@@ -759,8 +761,8 @@ def createSferaTask(epic, estimate, sprint, count, workGroup, archTaskReason):
         # "name": epic["name"] + " - " + postfixValue[count] + " - " + sprint["name"].split('.')[
         #     1] + "-" + sprint["name"].split('.')[2],
         "name": epic["name"] + " - " + postfixValue[count],
-        "assignee": config["SFERAUSER"]["devUser"],
-        "owner": config["SFERAUSER"]["devUser"],
+        "assignee": config["SFERAUSER"]["assignee"],
+        "owner": config["SFERAUSER"]["assignee"],
         "dueDate": sprint["endDate"],
         "estimation": estimate * 28800,
         "remainder": estimate * 28800,
@@ -781,24 +783,8 @@ def createSferaTask(epic, estimate, sprint, count, workGroup, archTaskReason):
                 "value": "Скоринговый конвейер КМБ"
             },
             {
-                "code": "projectConsumer",
-                "value": "c146f7f3-e894-4f22-bacd-0dcb110b01b4"
-            },
-            {
-                "code": "projectConsumer",
-                "value": "da2bc81b-5928-4f05-a7f4-4a9a5e48ce68"
-            },
-            {
-                "code": "projectConsumer",
-                "value": "1ec38fc1-2f03-497b-b51e-56e16ad8f260"
-            },
-            {
                 "code": "workGroup",
                 "value": workGroup
-            },
-            {
-                "code": "systems",
-                "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
             }
         ]
     }
@@ -809,7 +795,31 @@ def createSferaTask(epic, estimate, sprint, count, workGroup, archTaskReason):
                 "value": archTaskReason
             })
 
-    response = session.post(sferaUrl, json=data, verify=False)
+    projects = [project for project in epic['customFieldsValues'] if project['code'] == "projectConsumer"]
+
+    if len(projects) != 0:
+        for project in projects:
+            data['customFieldsValues'].append({
+                "code": project['code'],
+                "value": project['value']
+            })
+
+    systems = [system for system in epic['customFieldsValues'] if system['code'] == "systems"]
+
+    if len(systems) != 0:
+        for system in systems:
+            data['customFieldsValues'].append({
+                "code": system['code'],
+                "value": system['value']
+            })
+    else:
+        data['customFieldsValues'].append({
+            "code": "systems",
+            "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
+        })
+
+
+    response = session.post(sferaUrlSearch, json=data, verify=False)
     if response.ok != True:
         raise Exception("Error creating story " + response)
     return json.loads(response.text)
@@ -818,8 +828,8 @@ def createSferaTask(epic, estimate, sprint, count, workGroup, archTaskReason):
 def createSferaDefect(epic, estimate, sprint, count, workGroup):
     data = {
         "description": "Устранение дефектов" + " - " + postfixDefectValue[count],
-        "assignee": config["SFERAUSER"]["devUser"],
-        "owner": config["SFERAUSER"]["devUser"],
+        "assignee": config["SFERAUSER"]["assignee"],
+        "owner": config["SFERAUSER"]["assignee"],
         "dueDate": sprint["endDate"],
         "estimation": estimate * 28800,
         "remainder": estimate * 28800,
@@ -857,7 +867,7 @@ def createSferaDefect(epic, estimate, sprint, count, workGroup):
         ]
     }
 
-    response = session.post(sferaUrl, json=data, verify=False)
+    response = session.post(sferaUrlSearch, json=data, verify=False)
     if response.ok != True:
         raise Exception("Error creating story " + response)
     return json.loads(response.text)
@@ -1147,13 +1157,13 @@ def publication_release_html(html, parentPage, page_name):
 
 # changeTaskType("SCOR-2702")
 # changeAllNotDoneSubTaskDueDate("2024-07-02")
-# changeSubTaskSprintDueDate('4250', '4251', "2024-07-02")
+# changeSubTaskSprintDueDate('4252', '4253', "2024-07-31")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
 # changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
-# changeNotPlanedDueDate("2023-09-27")
+changeNotPlanedDueDate("2024-09-24")
 # changeEstimation('19', "2023-08-15")
 # closeAllDoneTask()
-closeAllTaskInSprint(6)
+# closeAllTaskInSprint(6)
 # closeAllDefectInSprint()
 # changeChildParent("SKOKR-4625", "SKOKR-4629")
 # changeChildParent("SKOKR-4625", "SKOKR-4625")
@@ -1164,5 +1174,8 @@ closeAllTaskInSprint(6)
 # out = createSuperSprintIssue("Task")
 # out = createSuperSprintIssue("Defect")
 # print("\n" + out)
+
+# data = pd.read_csv('area.csv', index_col=0)
+# print(data.loc['SKOKR']['email'])
 
 
