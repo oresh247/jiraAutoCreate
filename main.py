@@ -15,7 +15,7 @@ import html
 from bs4 import BeautifulSoup
 import pandas as pd
 import numpy as np
-
+import os
 
 from requests.auth import HTTPBasicAuth
 
@@ -34,6 +34,7 @@ jiraUrl = config["JIRA"]["jiraUrl"]
 sprintUrl = config["JIRA"]["sprintUrl"]
 sprintId = json.loads(configJira["SPRINT"]["sprintId"])
 postfixValue = json.loads(configJira["POSTFIX"]["postfixValue"])
+checkDescription = json.loads(configJira["CHECK"]["checkDescription"])
 postfixDefectValue = json.loads(configJira["POSTFIX"]["postfixDefectValue"])
 log = {}
 CLEANR = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
@@ -50,6 +51,9 @@ sferaUrlSearch = config["SFERA"]["sferaUrlSearch"]
 sferaUrlKnowledge = config["SFERA"]["sferaUrlKnowledge"]
 sferaUrlKnowledge2 = config["SFERA"]["sferaUrlKnowledge2"]
 sferaUrlRelations = config["SFERA"]["sferaUrlRelations"]
+sferaUrlViews = config["SFERA"]["sferaUrlViews"]
+
+
 
 # session = requests.Session()
 # session.auth = (config["USER"]["user"], config["USER"]["password"])
@@ -407,10 +411,7 @@ def createSuperSprintIssue(issuetype):
         return output
 
 
-def getSferaTask(taskId):
-    url = sferaUrl + taskId
-    response = session.get(url, verify=False)
-    return json.loads(response.text)
+
 
 
 def changeChildParent(oldParentId, newParentId):
@@ -441,7 +442,7 @@ def changeDueDate(taskId, dueDate):
 
 def closeAllDoneSubTask():
     query = "area+%3D+%27SKOKR%27++and+type+in+(%27subtask%27)+and+status+%3D+%27done%27"
-    urlQuery = sferaUrl + "?query=" + query
+    urlQuery = sferaUrlSearch + "?query=" + query
     data = {"status": "closed"}
     response = session.get(urlQuery, verify=False)
     subTasks = json.loads(response.text)
@@ -450,7 +451,10 @@ def closeAllDoneSubTask():
         print(subTaskNumber)
         url = sferaUrl + subTaskNumber
         session.patch(url, json=data, verify=False)
-
+def getSferaTask(taskId):
+    url = sferaUrl + taskId
+    response = session.get(url, verify=False)
+    return json.loads(response.text)
 
 def getTestCase(testCaseId):
     url = sferaTestCaseUrl + testCaseId
@@ -633,6 +637,8 @@ def changeSubTaskSprintDueDate(oldSprint, newSprint, date):
     query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+type+in+(%27subtask%27)+and+not+hasOnlyActiveOrPlannedSprint()+and+sprint%3D%27" + oldSprint + "%27"
     #query = "statusCategory+!%3D+%27Done%27+and+area+%3D+%27SKOKR%27+and+type+in+(%27subtask%27)+and+sprint%3D%27" + oldSprint + "%27"
     urlQuery = sferaUrlSearch + "?query=" + query
+    #urlQuery = sferaUrl + "?query=" + query
+    #urlQuery = "https://sfera.inno.local/app/tasks/api/v1/entity-views?page=0&size=20&attributes=checkbox%2Cnumber%2Cname%2Cpriority%2Cstatus%2Cassignee%2Cowner%2CdueDate%2Clabel%2Ccomponent%2CactualSprint%2Cdecision%2Cresolution%2CnameProject%2CarchTaskReason%2CexternalLinks%2Cattachments%2Csystems%2CsubSystems%2CstreamConsumer%2CstreamOwner%2CprojectConsumer%2CaffectedInVersion%2CfixedInVersion%2C%20rank%2C%20id%2C%20parent%2C%20worklog%2C%20type%2C%20serviceClass%2C%20estimation&query=area%3D%27SKOKR%27%20and%20statusCategory%21%3D%27Done%27%20and%20type%20in%20%28%27subtask%27%29%20and%20sprint%20%3D%20%274259%27"
     data = {
         "sprint": newSprint,
         "dueDate": date
@@ -818,6 +824,21 @@ def createSferaTask(epic, estimate, sprint, count, workGroup, archTaskReason):
             "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
         })
 
+    laborActivitys = [laborActivity for laborActivity in epic['customFieldsValues'] if laborActivity['code'] == "laborActivity"]
+    if len(laborActivitys) != 0:
+        for laborActivity in laborActivitys:
+            data['customFieldsValues'].append({
+                "code": laborActivity['code'],
+                "value": laborActivity['value']
+            })
+
+    specLimits = [specLimit for specLimit in epic['customFieldsValues'] if specLimit['code'] == "specLimit"]
+    if len(specLimits) != 0:
+        for specLimit in specLimits:
+            data['customFieldsValues'].append({
+                "code": specLimit['code'],
+                "value": specLimit['value']
+            })
 
     response = session.post(sferaUrlSearch, json=data, verify=False)
     if response.ok != True:
@@ -844,12 +865,12 @@ def createSferaDefect(epic, estimate, sprint, count, workGroup):
         "customFieldsValues": [
             {
                 "code": "systems",
-                # "value": "1854 ОПС ССО"
+                #"value": "1854 ОПС ССО"
                 "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
             },
             {
                 "code": "detectedInSystem",
-                # "value": "1854 ОПС ССО"
+                #"value": "1854 ОПС ССО"
                 "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
             },
             {
@@ -891,7 +912,7 @@ def getDeliveryPriority(epic):
 
 def changeAllNotDoneSubTaskDueDate(date):
     query = "statusCategory%20%21%3D%20%27Done%27%20and%20area%20%3D%20%27SKOKR%27%20and%20type%20in%20%28%27subtask%27%29%20&size=1000&page=0&attributesToReturn=number%2Cname%2CactualSprint%2Cpriority%2Cstatus%2Cestimation%2Cspent%2Cassignee%2Cowner%2CdueDate%2CupdateDate%2CcreateDate"
-    urlQuery = sferaUrl + "?query=" + query
+    urlQuery = sferaUrlSearch + "?query=" + query
     data = {
         "dueDate": date
     }
@@ -1119,12 +1140,118 @@ def publication_release_html(html, parentPage, page_name):
     return json.loads(response.text)
 
 
+def get_epics_for_check():
+    # Формируем запрос
+    #"https://sfera.inno.local/app/tasks/api/v1/entity-views?page=0&size=20&attributes=checkbox%2Cnumber%2Cname%2Cstatus%2Cassignee%2Cowner%2CdueDate%2Clabel%2Ccomponent%2CactualSprint%2Cestimation%2CacceptanceCriteria%2Cdescription%2CworkGroup%2Csystems%2CtargetSuperSprint%2CdeliveryPriority%2CstreamConsumer%2CstreamOwner%2Cresolution%2CarchTaskReason%2CexternalLinks%2Cattachments%2CsubSystems%2CprojectConsumer%2CaffectedInVersion%2CfixedInVersion%2C%20rank%2C%20id%2C%20parent%2C%20worklog%2C%20type%2C%20serviceClass%2C%20estimation&query=area%20%3D%20%27SCOR%27%20and%20type%20%3D%20%27epic%27%20and%20targetSuperSprint%20%3D%20%27%D0%A1%D0%A12025.1%27"
+    page_size = "?page=0&size=200"
+    attributes = "&attributes=checkbox%2Cnumber%2Cname%2Cstatus%2Cassignee%2Cowner%2CdueDate%2Clabel%2Ccomponent%2CactualSprint%2Cestimation%2CacceptanceCriteria%2Cdescription%2CworkGroup%2Csystems%2CtargetSuperSprint%2CdeliveryPriority%2CstreamConsumer%2CstreamOwner%2Cresolution%2CarchTaskReason%2CexternalLinks%2Cattachments%2CsubSystems%2CprojectConsumer%2CaffectedInVersion%2CfixedInVersion%2C%20rank%2C%20id%2C%20parent%2C%20worklog%2C%20type%2C%20serviceClass%2C%20estimation"
+    query = "&query=area%20%3D%20%27SCOR%27%20and%20type%20%3D%20%27epic%27%20and%20targetSuperSprint%20%3D%20%27%D0%A1%D0%A12025.1%27"
+    url = sferaUrlViews + page_size + attributes + query
+    # Делаем запрос задач по фильтру
+    response = session.get(url, verify=False)
+    if response.ok != True:
+        raise Exception("Error get sprint data " + response)
+    return json.loads(response.text)
+
+
+def epic_check_description(epics):
+    epic_list = []
+    for epic in epics['content']:
+        attr_list = []
+        number = epic['number']
+        acceptanceCriteria = epic['acceptanceCriteria']
+        if "owner" in epic:
+            owner = epic['owner']["name"]
+        else:
+            owner = "не назначен"
+        attr_list.append(number)
+        attr_list.append(owner)
+        attr_list.append(acceptanceCriteria)
+        if 'description' in epic:
+            desc = epic['description'].lower()
+        else:
+            desc = ""
+        desc_len = len(desc)
+        attr_list.append(desc_len)
+        for check in checkDescription:
+            if check in desc:
+                result = 1
+            else:
+                result = 0
+            attr_list.append(result)
+        epic_list.append(attr_list)
+
+    columns = ["ЭПИК", "Владелец", "Критерий приемки", "описание (символов)"] + checkDescription
+    df = pd.DataFrame(epic_list, columns=columns)
+    return df
+
+
+def generate_release_html(tasks_df):
+    # Генерируем HTML-код
+    html_code = tasks_df.to_html(index=False)
+
+    # Декодируем HTML-спецсимволы
+    decoded_html = html.unescape(html_code)
+    decoded_html = str.replace(decoded_html, '\n', '')
+    decoded_html = str.replace(decoded_html, '\\n', '')
+    decoded_html = str.replace(decoded_html, '"', '')
+    decoded_html = str.replace(decoded_html, "'", '"')
+    decoded_html = str.replace(decoded_html, 'class=sfera-link sfera-task sfera-link-style',
+                               'class="sfera-link sfera-task sfera-link-style"')
+    decoded_html = str.replace(decoded_html, '<table border=1 class=dataframe>',
+                               '<table class="MsoNormalTable" border="1" cellspacing="0" cellpadding="0" width="1440" data-widthmode="wide" data-lastwidth="1761px" style="border-collapse: collapse; width: 1761px;" data-rtc-uid="67d29bf0-31c7-4de5-909d-8cea7a11f75f" id="mce_2">')
+    return decoded_html
+
+
+def replace_release_html(html, page_id):
+    url1 = sferaUrlKnowledge + 'cid/' + page_id
+    response = session.get(url1, verify=False)
+    id = json.loads(response.text)['payload']['id']
+    data = {
+        "id": id,
+        "content": html,
+        "name": "Проверка ЭПИКов"
+    }
+    url2 =sferaUrlKnowledge2 + '/' + page_id
+    response = session.patch(url2, json=data, verify=False)
+    if response.ok != True:
+        raise Exception("Error creating story " + response)
+    return json.loads(response.text)
+
+
+def check_epics(page_id):
+    # Получить список эпиков
+    epics = get_epics_for_check()
+
+
+    # # Сохраняем данные в файл
+    # with open('epics.json', 'w', encoding='utf-8') as file:
+    #     json.dump(epics, file, ensure_ascii=False, indent=4)
+
+    # # Открываем файл data.json в режиме чтения
+    # with open('epics.json', 'r', encoding='utf-8') as file:
+    #     # Загружаем данные из файла в переменную data
+    #     epics = json.load(file)
+
+
+    # Выполнить проверки по эпикам
+    df = epic_check_description(epics)
+    html = generate_release_html(df)
+    replace_release_html(html, page_id)
+
+    # Опубликовать отчет
+    print(df)
+
+
+
+# Проверка Эпиков
+check_epics("1422085")
+
+
 # # Генерация страницы ЗНИ
 # parent_page = '426943'
 # release = 'OKR_20240623_ATM'
 # release_page_gen(parent_page, release, release)
-
-
 
 # out = createSuperSprintSferaIssue("task")
 # out = createSuperSprintSferaIssue("defect")
@@ -1134,8 +1261,10 @@ def publication_release_html(html, parentPage, page_name):
 # task_list = search_tasks('1258896', 'SKOKR') # Получаем список задач
 # add_task_to_story(task_list, 'SKOKR-6107') # Добавляем все задачи в Story
 
-# # Распечатка всех задач в Story
-# dics = get_links('SKOKR-6116')
+# Распечатка всех задач в Story
+# story = 'SKPLINT-6950'
+# dics = get_links(story)
+# print('STORY: ' + story)
 # for key, value in dics.items():
 #     print(f"{key}: {value}")
 
@@ -1156,11 +1285,11 @@ def publication_release_html(html, parentPage, page_name):
 # print (tasks_df)
 
 # changeTaskType("SCOR-2702")
-# changeAllNotDoneSubTaskDueDate("2024-07-02")
-# changeSubTaskSprintDueDate('4252', '4253', "2024-07-31")
+# changeAllNotDoneSubTaskDueDate("2024-12-18")
+# changeSubTaskSprintDueDate('4261', '4262', "2024-12-04")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
 # changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
-changeNotPlanedDueDate("2024-09-24")
+# changeNotPlanedDueDate("2024-09-24")
 # changeEstimation('19', "2023-08-15")
 # closeAllDoneTask()
 # closeAllTaskInSprint(6)
