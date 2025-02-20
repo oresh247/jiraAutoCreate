@@ -53,7 +53,8 @@ sferaUrlKnowledge2 = config["SFERA"]["sferaUrlKnowledge2"]
 sferaUrlRelations = config["SFERA"]["sferaUrlRelations"]
 sferaUrlViews = config["SFERA"]["sferaUrlViews"]
 
-
+# Сервисы
+OKR_SERVICE_LST = json.loads(configJira["SERVICE"]["OKR_SERVICE_LST"])
 
 # session = requests.Session()
 # session.auth = (config["USER"]["user"], config["USER"]["password"])
@@ -821,6 +822,7 @@ def createSferaTask(epic, estimate, sprint, count, workGroup, archTaskReason):
     else:
         data['customFieldsValues'].append({
             "code": "systems",
+            # "value": "1854 ОПС ССО"
             "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
         })
 
@@ -1032,9 +1034,10 @@ def get_links(story):
     story_data = getSferaTask(story)
     dics = dict()
     for task in story_data['relatedEntities']:
-        task_num = task['entity']['number']
-        task_name = task['entity']['name']
-        dics[task_num] = task_name
+        if task['relationType'] != 'clones' and task['relationType'] != 'isClonedBy':
+            task_num = task['entity']['number']
+            task_name = task['entity']['name']
+            dics[task_num] = task_name
     return dics
 
 
@@ -1159,12 +1162,31 @@ def epic_check_description(epics):
     for epic in epics['content']:
         attr_list = []
         number = epic['number']
+        name = epic['name']
+
+        if "deliveryPriority" in epic:
+            deliveryPriority = epic['deliveryPriority']["name"]
+        else:
+            deliveryPriority = "не назначен"
+
         acceptanceCriteria = epic['acceptanceCriteria']
+
         if "owner" in epic:
             owner = epic['owner']["name"]
         else:
             owner = "не назначен"
+
+        if "assignee" in epic:
+            assignee = epic['assignee']["name"]
+        else:
+            assignee = "не назначен"
+
         attr_list.append(number)
+        attr_list.append(deliveryPriority)
+
+        attr_list.append(name)
+        attr_list.append(assignee)
+
         attr_list.append(owner)
         attr_list.append(acceptanceCriteria)
         if 'description' in epic:
@@ -1181,7 +1203,7 @@ def epic_check_description(epics):
             attr_list.append(result)
         epic_list.append(attr_list)
 
-    columns = ["ЭПИК", "Владелец", "Критерий приемки", "описание (символов)"] + checkDescription
+    columns = ["ЭПИК", "Приоритет", "Заголовок", "Исполнитель", "Владелец", "Критерий приемки", "описание (символов)"] + checkDescription
     df = pd.DataFrame(epic_list, columns=columns)
     return df
 
@@ -1218,7 +1240,6 @@ def replace_release_html(html, page_id):
         raise Exception("Error creating story " + response)
     return json.loads(response.text)
 
-
 def check_epics(page_id):
     # Получить список эпиков
     epics = get_epics_for_check()
@@ -1243,9 +1264,88 @@ def check_epics(page_id):
     print(df)
 
 
+def get_sprints():
+    url = "https://sfera.inno.local/app/tasks/api/v0.1/sprints?areaCode=SCOR&page=0&size=150&statuses=active,planned"
+    # Делаем запрос задач по фильтру
+    response = session.get(url, verify=False)
+    if response.ok != True:
+        raise Exception("Error get sprint data " + response)
+    sprints = json.loads(response.text)
+    # Сохраняем данные в файл
+    with open('sprints.json', 'w', encoding='utf-8') as file:
+        json.dump(sprints, file, ensure_ascii=False, indent=4)
+    return sprints
+
+
+def getServiceId(serviceName):
+    response = session.get("https://sfera.inno.local/app/tasks/api/v1/components?keyword=s&page=0&size=100&areaCode=SKOKR&sort=name", verify=False)
+    if response.ok != True:
+        print("Error get id service" + serviceName)
+
+    # Преобразуем строку JSON в словарь
+    data = json.loads(response.text)
+
+    # Ищем сервис по имени
+    for service in data['content']:
+        if service['name'] == serviceName:
+            return service['id']
+
+
+def createSubtaskFromTask(serviceName, taskId, taskName, taskDescription):
+    serviceId = getServiceId(serviceName)
+    data = {
+        "name": "[" + serviceName + "] " + taskName,
+        "priority": "average",
+        "status": "created",
+        "area": "SKOKR",
+        "type": "subtask",
+        "description": taskDescription,
+        "assignee": "vtb4068421@corp.dev.vtb",
+        "owner": "vtb4068421@corp.dev.vtb",
+        "label": [
+            {
+                "id": 59055
+            }
+        ],
+        "component": [
+            {
+                "id": serviceId
+            }
+        ],
+        "parent": taskId,
+        "workType": "Разработка",
+        "rightTransferApproval": True
+    }
+
+    #response = session.post(sferaUrlSearch, json=data, verify=False)
+    response = session.post("https://sfera.inno.local/app/tasks/api/v1/entities", json=data, verify=False)
+    if response.ok != True:
+        raise Exception("Error creating story " + response)
+    return json.loads(response.text)
+
+
+def createSubtaskForAllServices(taskId):
+    subtaskLst = []
+    task = getSferaTask(taskId)
+    taskName = task['name']
+    taskDescription = task['description']
+    for serviceName in OKR_SERVICE_LST:
+        subtask = createSubtaskFromTask(serviceName, taskId, taskName, taskDescription)
+        subtaskLst.append(subtask['number'])
+    return subtaskLst
+
+
+# # Создание подзадач на все сервисы ОКР
+# taskId = "SKOKR-7020"
+# taskList = createSubtaskForAllServices(taskId)
+# print(taskList)
+
+# Получение списка ЭПИКов и сохранение в JSON
+# epics = get_sprints()
+
 
 # Проверка Эпиков
-check_epics("1422085")
+# check_epics("1422085")
 
 
 # # Генерация страницы ЗНИ
@@ -1262,7 +1362,7 @@ check_epics("1422085")
 # add_task_to_story(task_list, 'SKOKR-6107') # Добавляем все задачи в Story
 
 # Распечатка всех задач в Story
-# story = 'SKPLINT-6950'
+# story = 'SKOKR-7100'
 # dics = get_links(story)
 # print('STORY: ' + story)
 # for key, value in dics.items():
@@ -1286,7 +1386,7 @@ check_epics("1422085")
 
 # changeTaskType("SCOR-2702")
 # changeAllNotDoneSubTaskDueDate("2024-12-18")
-# changeSubTaskSprintDueDate('4261', '4262', "2024-12-04")
+# changeSubTaskSprintDueDate('4333', '4334', "2025-02-26")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
 # changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
 # changeNotPlanedDueDate("2024-09-24")
@@ -1306,5 +1406,7 @@ check_epics("1422085")
 
 # data = pd.read_csv('area.csv', index_col=0)
 # print(data.loc['SKOKR']['email'])
+
+
 
 
