@@ -867,12 +867,12 @@ def createSferaDefect(epic, estimate, sprint, count, workGroup):
         "customFieldsValues": [
             {
                 "code": "systems",
-                #"value": "1854 ОПС ССО"
+                # "value": "1854 ОПС ССО"
                 "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
             },
             {
                 "code": "detectedInSystem",
-                #"value": "1854 ОПС ССО"
+                # "value": "1854 ОПС ССО"
                 "value": "1864 Скоринговый конвейер кредитования малого бизнеса"
             },
             {
@@ -1148,7 +1148,7 @@ def get_epics_for_check():
     #"https://sfera.inno.local/app/tasks/api/v1/entity-views?page=0&size=20&attributes=checkbox%2Cnumber%2Cname%2Cstatus%2Cassignee%2Cowner%2CdueDate%2Clabel%2Ccomponent%2CactualSprint%2Cestimation%2CacceptanceCriteria%2Cdescription%2CworkGroup%2Csystems%2CtargetSuperSprint%2CdeliveryPriority%2CstreamConsumer%2CstreamOwner%2Cresolution%2CarchTaskReason%2CexternalLinks%2Cattachments%2CsubSystems%2CprojectConsumer%2CaffectedInVersion%2CfixedInVersion%2C%20rank%2C%20id%2C%20parent%2C%20worklog%2C%20type%2C%20serviceClass%2C%20estimation&query=area%20%3D%20%27SCOR%27%20and%20type%20%3D%20%27epic%27%20and%20targetSuperSprint%20%3D%20%27%D0%A1%D0%A12025.1%27"
     page_size = "?page=0&size=200"
     attributes = "&attributes=checkbox%2Cnumber%2Cname%2Cstatus%2Cassignee%2Cowner%2CdueDate%2Clabel%2Ccomponent%2CactualSprint%2Cestimation%2CacceptanceCriteria%2Cdescription%2CworkGroup%2Csystems%2CtargetSuperSprint%2CdeliveryPriority%2CstreamConsumer%2CstreamOwner%2Cresolution%2CarchTaskReason%2CexternalLinks%2Cattachments%2CsubSystems%2CprojectConsumer%2CaffectedInVersion%2CfixedInVersion%2C%20rank%2C%20id%2C%20parent%2C%20worklog%2C%20type%2C%20serviceClass%2C%20estimation"
-    query = "&query=area%20%3D%20%27SCOR%27%20and%20type%20%3D%20%27epic%27%20and%20targetSuperSprint%20%3D%20%27%D0%A1%D0%A12025.1%27"
+    query = "&query=area%20%3D%20%27SCOR%27%20and%20type%20%3D%20%27epic%27%20and%20targetSuperSprint%20%3D%20%27%D0%A1%D0%A12025.2%27"
     url = sferaUrlViews + page_size + attributes + query
     # Делаем запрос задач по фильтру
     response = session.get(url, verify=False)
@@ -1191,10 +1191,12 @@ def epic_check_description(epics):
         attr_list.append(acceptanceCriteria)
         if 'description' in epic:
             desc = epic['description'].lower()
+            description = epic['description']
         else:
             desc = ""
         desc_len = len(desc)
         attr_list.append(desc_len)
+        attr_list.append(description[:400])
         for check in checkDescription:
             if check in desc:
                 result = 1
@@ -1203,7 +1205,7 @@ def epic_check_description(epics):
             attr_list.append(result)
         epic_list.append(attr_list)
 
-    columns = ["ЭПИК", "Приоритет", "Заголовок", "Исполнитель", "Владелец", "Критерий приемки", "описание (символов)"] + checkDescription
+    columns = ["ЭПИК", "Приоритет", "Заголовок", "Исполнитель", "Владелец", "Критерий приемки", "описание (кол. символов)", "описание (400 символов)"] + checkDescription
     df = pd.DataFrame(epic_list, columns=columns)
     return df
 
@@ -1386,13 +1388,13 @@ def createSubtaskForAllServices(taskId):
 
 # changeTaskType("SCOR-2702")
 # changeAllNotDoneSubTaskDueDate("2024-12-18")
-# changeSubTaskSprintDueDate('4333', '4334', "2025-02-26")
+# changeSubTaskSprintDueDate('4336', '4337', "2025-04-09")
 # changeDefectSprintDueDate('21', '22', "2023-09-26")
 # changeTypeToSubtask("SKOKR-4828", "SKOKR-4625", "subtask")
 # changeNotPlanedDueDate("2024-09-24")
 # changeEstimation('19', "2023-08-15")
 # closeAllDoneTask()
-# closeAllTaskInSprint(6)
+closeAllTaskInSprint(6)
 # closeAllDefectInSprint()
 # changeChildParent("SKOKR-4625", "SKOKR-4629")
 # changeChildParent("SKOKR-4625", "SKOKR-4625")
